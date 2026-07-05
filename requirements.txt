@@ -1,0 +1,8 @@
+opencv-python
+numpy
+onnxruntime
+torch
+facenet-pytorch
+onnx
+onnxconverter-common
+onnxscript
