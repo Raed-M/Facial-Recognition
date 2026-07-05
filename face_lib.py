@@ -1,4 +1,4 @@
-"""Core library: face detection (UltraFace), embedding (FaceNet), and the enrollment DB."""
+"""Core library: face detection (UltraFace), embedding (MobileFaceNet), and enrollment DB."""
 import os
 
 import cv2
@@ -6,9 +6,9 @@ import numpy as np
 import onnxruntime as ort
 
 DETECTOR_PATH = "models/version-RFB-320.onnx"
-EMBEDDER_PATH = "models/facenet.onnx"        # swap for models/facenet_fp16.onnx after setup
+EMBEDDER_PATH = "models/mobilefacenet.onnx"  # swap for models/mobilefacenet_int8.onnx after setup
 DB_PATH = "face_db.npy"
-THRESHOLD = 0.9  # L2 distance on normalized embeddings; tune with real data (see README)
+THRESHOLD = 0.6  # L2 distance on normalized embeddings; tune with real data (see README)
 
 
 def load_session(path):
@@ -55,12 +55,12 @@ def _nms(boxes, scores, iou_thresh):
     return keep
 
 
-# ---------------- Embedding (FaceNet, 160x160 input) ----------------
+# ---------------- Embedding (MobileFaceNet, 112x112 input) ----------------
 
 def embed(session, face_bgr):
     """Map a BGR face crop to a normalized 512-d embedding."""
-    face = cv2.cvtColor(cv2.resize(face_bgr, (160, 160)), cv2.COLOR_BGR2RGB)
-    x = ((face.astype(np.float32) - 127.5) / 128.0).transpose(2, 0, 1)[None]
+    face = cv2.cvtColor(cv2.resize(face_bgr, (112, 112)), cv2.COLOR_BGR2RGB)
+    x = ((face.astype(np.float32) - 127.5) / 127.5).transpose(2, 0, 1)[None]
     e = session.run(None, {session.get_inputs()[0].name: x})[0][0]
     return e / np.linalg.norm(e)
 

@@ -1,41 +1,43 @@
-"""One-time setup: download the UltraFace detector, export FaceNet to ONNX, make an FP16 copy.
+"""One-time setup: download UltraFace detector + MobileFaceNet embedder, make INT8 copy.
 
 Run once:  python setup_models.py
 """
 import os
 import urllib.request
+import zipfile
 
 os.makedirs("models", exist_ok=True)
 
-# 1. Face detector: UltraFace RFB-320 (already an ONNX file, ~1.2 MB)
+# 1. Face detector: UltraFace RFB-320 (~1.2 MB ONNX)
 DETECTOR_URL = ("https://github.com/onnx/models/raw/main/validated/vision/"
                 "body_analysis/ultraface/models/version-RFB-320.onnx")
-detector_path = "models/version-RFB-320.onnx"
-if not os.path.exists(detector_path):
+if not os.path.exists("models/version-RFB-320.onnx"):
     print("Downloading UltraFace detector...")
-    urllib.request.urlretrieve(DETECTOR_URL, detector_path)
-    if os.path.getsize(detector_path) < 1_000_000:
-        os.remove(detector_path)
-        raise RuntimeError("Download failed (got a Git-LFS pointer instead of the model).")
+    urllib.request.urlretrieve(DETECTOR_URL, "models/version-RFB-320.onnx")
 
-# 2. Embedder: export the pre-trained FaceNet (trained with triplet loss) to ONNX
-import torch
-from facenet_pytorch import InceptionResnetV1
+# 2. MobileFaceNet: pre-trained with ArcFace loss on WebFace600K (from InsightFace)
+MBFNET_URL = "https://github.com/deepinsight/insightface/releases/download/v0.7/buffalo_sc.zip"
+if not os.path.exists("models/mobilefacenet.onnx"):
+    print("Downloading MobileFaceNet...")
+    urllib.request.urlretrieve(MBFNET_URL, "models/buffalo_sc.zip")
+    with zipfile.ZipFile("models/buffalo_sc.zip") as z:
+        for name in z.namelist():
+            if name.endswith("w600k_mbf.onnx"):
+                with open("models/mobilefacenet.onnx", "wb") as f:
+                    f.write(z.read(name))
+                break
+    os.remove("models/buffalo_sc.zip")
 
-if not os.path.exists("models/facenet.onnx"):
-    print("Exporting FaceNet to ONNX (downloads pretrained weights on first run)...")
-    model = InceptionResnetV1(pretrained="vggface2").eval()
-    torch.onnx.export(model, torch.randn(1, 3, 160, 160), "models/facenet.onnx",
-                      input_names=["input"], output_names=["embedding"], opset_version=17)
+# 3. INT8 quantized copy (ARM Cortex-M runs INT8 natively via CMSIS-NN)
+from onnxruntime.quantization import quantize_dynamic, QuantType
 
-# 3. FP16 quantized copy (keep_io_types=True so the same inference code works for both)
-import onnx
-from onnxconverter_common import float16
+if not os.path.exists("models/mobilefacenet_int8.onnx"):
+    print("Creating INT8 model...")
+    quantize_dynamic("models/mobilefacenet.onnx", "models/mobilefacenet_int8.onnx",
+                     weight_type=QuantType.QInt8)
 
-if not os.path.exists("models/facenet_fp16.onnx"):
-    print("Creating FP16 model...")
-    m = onnx.load("models/facenet.onnx")
-    onnx.save(float16.convert_float_to_float16(m, keep_io_types=True),
-              "models/facenet_fp16.onnx")
-
-print("Done. Models are in ./models/")
+for name in ["version-RFB-320.onnx", "mobilefacenet.onnx", "mobilefacenet_int8.onnx"]:
+    path = f"models/{name}"
+    if os.path.exists(path):
+        print(f"  {name}: {os.path.getsize(path) / 1e6:.1f} MB")
+print("Done.")

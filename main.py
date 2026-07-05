@@ -17,7 +17,10 @@ db = fl.load_db()
 print(f"Loaded {len(db)} enrolled user(s): {list(db)}")
 
 cap = cv2.VideoCapture(0)
-enrolling, samples, new_name = False, [], ""
+enrolling = False
+samples = []
+new_name = ""
+
 
 while True:
     ok, frame = cap.read()
