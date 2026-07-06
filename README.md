@@ -8,10 +8,13 @@ The objective of this project is to develop a secure, low-data facial recognitio
    - Engineered specifically for edge computing devices: highly optimized and ultra-lightweight.
    - Already quantized using ONNX.
 
- ### Embedding model: InceptionResnetV1
-   - Pretrained on vggface2 using triplet loss.
-   - Quantized into Float16 using ONNX.
-  
+ ### Embedding model: InsightFace MobileFaceNet
+   - Trained using ArcFace
+   - Quantized into INT8 using ONNX.
+
+ ### Liveness/Anti Spoofing: MiniFASNet V2
+
+
   
 ## Initial Setup:
 1. Install the required packages using `pip install -r requirements.txt`. This will install Pytorch, ONNX, and OpenCV.
@@ -19,11 +22,12 @@ The objective of this project is to develop a secure, low-data facial recognitio
 
 
 ## Usage:
-This project utilizes the device's default camera.
-As of right now, this project receives user input from the terminal:
-  - Enter enroll mode by pressing `e`.
-    - The user will need to enter a name to associate with the new identity.   
-    - The system will Capture the face currently in frame and embed its features
-    - The ebeddings will be stored in a file named `face_db.npy`
-    - Afterwards, it will exit enrollment mode.
-  - pressing `q` or `esc` will end the program.
+1. Run `server.py` on the Raspberry Pi or a laptop:
+   - This device's camera will be used to capture the visual input.
+   - The device will process the visual input identify faces and log them.
+   - The device will host a Management web server at `http://<Device IP>:8000/`
+2. Connect to the web server at `http://<Device IP>:8000/` to access the management console. Through this console, an admin can:
+   - View the capture device's camera.
+   - View the log.
+   - Switch to enroll mode to enroll new users.
+   - View and delete previously enrolled users.
