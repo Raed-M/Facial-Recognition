@@ -1,41 +1,47 @@
-"""One-time setup: download the UltraFace detector, export FaceNet to ONNX, make an FP16 copy.
+"""One-time setup: download the three models and create the INT8 embedder.
 
 Run once:  python setup_models.py
 """
 import os
+import shutil
 import urllib.request
 
 os.makedirs("models", exist_ok=True)
 
-# 1. Face detector: UltraFace RFB-320 (already an ONNX file, ~1.2 MB)
-DETECTOR_URL = ("https://github.com/onnx/models/raw/main/validated/vision/"
-                "body_analysis/ultraface/models/version-RFB-320.onnx")
-detector_path = "models/version-RFB-320.onnx"
-if not os.path.exists(detector_path):
-    print("Downloading UltraFace detector...")
-    urllib.request.urlretrieve(DETECTOR_URL, detector_path)
-    if os.path.getsize(detector_path) < 1_000_000:
-        os.remove(detector_path)
-        raise RuntimeError("Download failed (got a Git-LFS pointer instead of the model).")
+DOWNLOADS = {
+    # Face detector: UltraFace RFB-320 (~1.2 MB)
+    "models/version-RFB-320.onnx":
+        "https://github.com/onnx/models/raw/main/validated/vision/"
+        "body_analysis/ultraface/models/version-RFB-320.onnx",
+    # Face embedder: InsightFace MobileFaceNet, ArcFace-trained (~13.6 MB)
+    "models/mobilefacenet.onnx":
+        "https://huggingface.co/WePrompt/buffalo_sc/resolve/main/w600k_mbf.onnx",
+}
 
-# 2. Embedder: export the pre-trained FaceNet (trained with triplet loss) to ONNX
-import torch
-from facenet_pytorch import InceptionResnetV1
+for path, url in DOWNLOADS.items():
+    if not os.path.exists(path):
+        print(f"Downloading {os.path.basename(path)} ...")
+        urllib.request.urlretrieve(url, path)
+        if os.path.getsize(path) < 500_000:   # a Git-LFS pointer, not the model
+            os.remove(path)
+            raise RuntimeError(f"Download of {path} failed - try again")
 
-if not os.path.exists("models/facenet.onnx"):
-    print("Exporting FaceNet to ONNX (downloads pretrained weights on first run)...")
-    model = InceptionResnetV1(pretrained="vggface2").eval()
-    torch.onnx.export(model, torch.randn(1, 3, 160, 160), "models/facenet.onnx",
-                      input_names=["input"], output_names=["embedding"], opset_version=17)
+# Liveness: MiniFASNet V2 (~1.7 MB). Fetched via huggingface_hub: the repo is
+# tiny, so we grab it whole and take whatever .onnx file it contains.
+if not os.path.exists("models/minifasnet_v2.onnx"):
+    print("Downloading MiniFASNet V2 ...")
+    from huggingface_hub import snapshot_download
+    repo = snapshot_download("garciafido/minifasnet-v2-anti-spoofing-onnx")
+    onnx_file = next(f for f in os.listdir(repo) if f.endswith(".onnx"))
+    shutil.copy(os.path.join(repo, onnx_file), "models/minifasnet_v2.onnx")
 
-# 3. FP16 quantized copy (keep_io_types=True so the same inference code works for both)
-import onnx
-from onnxconverter_common import float16
+# INT8 embedder: weight-quantized copy for the Pi's ARM CPU
+if not os.path.exists("models/mobilefacenet_int8.onnx"):
+    print("Quantizing embedder to INT8 ...")
+    from onnxruntime.quantization import quantize_dynamic, QuantType
+    quantize_dynamic("models/mobilefacenet.onnx", "models/mobilefacenet_int8.onnx",
+                     weight_type=QuantType.QInt8)
 
-if not os.path.exists("models/facenet_fp16.onnx"):
-    print("Creating FP16 model...")
-    m = onnx.load("models/facenet.onnx")
-    onnx.save(float16.convert_float_to_float16(m, keep_io_types=True),
-              "models/facenet_fp16.onnx")
-
-print("Done. Models are in ./models/")
+for f in sorted(os.listdir("models")):
+    print(f"  {f}: {os.path.getsize(os.path.join('models', f)) / 1e6:.1f} MB")
+print("Done.")
