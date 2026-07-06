@@ -1,0 +1,613 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Facelock</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #B0DDFF;
+    --onbg-text: #14153f;
+    --onbg-pill-bg: rgba(20,21,63,0.08);
+    --onbg-pill-border: rgba(20,21,63,0.18);
+    --onbg-pill-hover: rgba(20,21,63,0.14);
+    --panel: #14153f;
+    --panel-2: #1c1d54;
+    --line: #2c2e6a;
+    --line-soft: #24255a;
+    --text: #eef0fb;
+    --text-dim: #a7abda;
+    --text-faint: #6c70a6;
+    --live: #3ddc97;
+    --live-dim: rgba(61,220,151,0.15);
+    --danger: #ff6b61;
+    --danger-dim: rgba(255,107,97,0.15);
+    --accent: #ffffff;
+    --focus: #cfe0ff;
+    --radius: 6px;
+    --sans: 'IBM Plex Sans', -apple-system, Segoe UI, sans-serif;
+    --mono: 'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--text);
+    margin: 0;
+    min-height: 100vh;
+    padding: 28px 24px 60px;
+  }
+
+  a:focus-visible, button:focus-visible, input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+  .topbar {
+    max-width: 760px;
+    margin: 0 auto 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand svg { display: block; }
+  .brand h1 { font-size: 19px; font-weight: 500; margin: 0; color: var(--onbg-text); letter-spacing: 0.01em; }
+
+  .topbar-right { display: flex; align-items: center; gap: 10px; }
+
+  .system-status {
+    display: flex; align-items: center; gap: 8px;
+    font-family: var(--mono); font-size: 12px; color: var(--onbg-text);
+    background: var(--onbg-pill-bg); border: 1px solid var(--onbg-pill-border);
+    padding: 6px 12px; border-radius: 20px;
+  }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: rgba(20,21,63,0.35); flex-shrink: 0; }
+  .dot.on {
+    background: #6dffc1;
+    box-shadow: 0 0 0 0 rgba(109,255,193,0.5);
+    animation: pulse 2s ease-out infinite;
+  }
+  @keyframes pulse {
+    0%   { box-shadow: 0 0 0 0 rgba(109,255,193,0.45); }
+    70%  { box-shadow: 0 0 0 7px rgba(109,255,193,0); }
+    100% { box-shadow: 0 0 0 0 rgba(109,255,193,0); }
+  }
+  @media (prefers-reduced-motion: reduce) { .dot.on { animation: none; } }
+
+  #wink-eye { }
+
+  .nav-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-family: var(--sans); font-size: 13px; font-weight: 500; color: #fff;
+    background: var(--onbg-text); border: 1px solid var(--onbg-text);
+    padding: 8px 15px; border-radius: var(--radius); cursor: pointer;
+    transition: background 0.15s;
+  }
+  .nav-btn:hover { background: #1c1d54; }
+  .nav-btn.ghost {
+    background: var(--onbg-pill-bg); color: var(--onbg-text); border-color: var(--onbg-pill-border);
+  }
+  .nav-btn.ghost:hover { background: var(--onbg-pill-hover); }
+
+  #error-box {
+    max-width: 760px; margin: 0 auto 16px; display: none; align-items: center; gap: 10px;
+    background: #ffe2df; border: 1px solid #f5b6ae; color: #a3372c;
+    padding: 10px 14px; border-radius: var(--radius); font-size: 13px; font-family: var(--mono);
+  }
+  #error-box::before {
+    content: "!"; display: inline-flex; align-items: center; justify-content: center;
+    width: 16px; height: 16px; border-radius: 50%; background: var(--danger);
+    color: #fff; font-weight: 600; font-size: 11px; flex-shrink: 0;
+  }
+
+  .wrap { max-width: 760px; margin: 0 auto; }
+  .page { display: none; }
+  .page.active { display: block; }
+
+  .subnav { display: flex; gap: 8px; margin-bottom: 20px; }
+  .subnav-btn {
+    font-family: var(--sans); font-size: 13px; font-weight: 500;
+    background: var(--onbg-pill-bg); color: var(--onbg-text);
+    border: 1px solid var(--onbg-pill-border);
+    padding: 8px 16px; border-radius: 20px; cursor: pointer;
+    transition: background 0.15s;
+  }
+  .subnav-btn:hover { background: var(--onbg-pill-hover); }
+  .subnav-btn.active { background: var(--onbg-text); color: #fff; border-color: var(--onbg-text); }
+
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); margin-bottom: 20px; overflow: hidden; box-shadow: 0 2px 14px rgba(10,20,50,0.25); }
+  .panel-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+  .panel-label { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; color: var(--text-dim); text-transform: uppercase; }
+  .panel-body { padding: 16px; }
+
+  .viewfinder {
+    position: relative; background: #000; border-radius: 4px; overflow: hidden;
+    aspect-ratio: 16 / 9; border: 2px solid var(--line);
+    transition: border-color 0.3s;
+  }
+  .viewfinder.status-valid { border-color: var(--live); }
+  .viewfinder.status-invalid { border-color: var(--danger); }
+  .viewfinder img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .viewfinder .corner { position: absolute; width: 22px; height: 22px; border: 2px solid var(--line); opacity: 0.9; transition: border-color 0.3s; }
+  .viewfinder.status-valid .corner { border-color: var(--live); }
+  .viewfinder.status-invalid .corner { border-color: var(--danger); }
+  .viewfinder .corner.tl { top: 8px; left: 8px; border-right: none; border-bottom: none; }
+  .viewfinder .corner.tr { top: 8px; right: 8px; border-left: none; border-bottom: none; }
+  .viewfinder .corner.bl { bottom: 8px; left: 8px; border-right: none; border-top: none; }
+  .viewfinder .corner.br { bottom: 8px; right: 8px; border-left: none; border-top: none; }
+  #stream-offline {
+    position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
+    flex-direction: column; gap: 8px; color: var(--text-faint); font-family: var(--mono);
+    font-size: 13px; background: #05060f;
+  }
+  #stream-offline .glyph { font-size: 22px; color: var(--danger); }
+
+  #recognition-status { margin-top: 12px; font-family: var(--mono); font-size: 14px; min-height: 20px; }
+  #recognition-status.valid { color: var(--live); }
+  #recognition-status.invalid { color: var(--text-faint); }
+
+  #page-admin-lock .panel-body { display: flex; flex-direction: column; align-items: center; padding: 48px 20px; text-align: center; }
+  .lock-glyph {
+    width: 44px; height: 44px; border-radius: 50%;
+    border: 1px solid var(--line); display: flex; align-items: center; justify-content: center;
+    color: var(--text-faint); margin-bottom: 18px;
+  }
+  #page-admin-lock h2 { font-size: 16px; font-weight: 500; margin: 0 0 6px; color: var(--text); }
+  #page-admin-lock p { color: var(--text-faint); font-size: 13px; margin: 0 0 20px; max-width: 320px; }
+  #page-admin-lock input { width: 260px; text-align: center; }
+
+  label.field-label { display: block; font-family: var(--mono); font-size: 11px; color: var(--text-dim); letter-spacing: 0.04em; margin-bottom: 6px; }
+  input[type=text], input[type=password] {
+    width: 100%; background: var(--panel-2); border: 1px solid var(--line); color: var(--text);
+    padding: 9px 11px; border-radius: var(--radius); font-size: 13px; font-family: var(--mono); margin-bottom: 12px;
+  }
+  input::placeholder { color: var(--text-faint); }
+
+  button.action {
+    font-family: var(--sans); font-weight: 500; border: 1px solid transparent;
+    padding: 9px 16px; border-radius: var(--radius); font-size: 13px; cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  button.primary { background: var(--accent); color: #16233d; }
+  button.primary:hover { background: #d9e2f7; }
+  button.secondary { background: transparent; color: var(--text-dim); border-color: var(--line); }
+  button.secondary:hover { border-color: var(--text-dim); color: var(--text); }
+
+  .danger-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: transparent; color: var(--danger); border: 1px solid rgba(255,107,97,0.5);
+    padding: 6px 12px; font-size: 12px; border-radius: var(--radius); cursor: pointer;
+    font-family: var(--sans); font-weight: 500; transition: background 0.15s;
+  }
+  .danger-btn:hover { background: var(--danger-dim); }
+  .danger-btn svg { flex-shrink: 0; }
+
+  .muted { color: var(--text-faint); font-size: 12px; margin-top: 2px; }
+  #enroll-status { font-family: var(--mono); font-size: 12px; color: var(--live); margin-top: 10px; min-height: 16px; }
+
+  #users-list { display: flex; flex-direction: column; gap: 0; }
+  .user-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-top: 1px solid var(--line-soft); font-size: 13px; }
+  .user-item:first-child { border-top: none; }
+  .user-item .uname { display: flex; align-items: center; gap: 8px; color: var(--text); }
+  .user-item .uname::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--live); }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">
+    <svg width="26" height="26" viewBox="0 0 26 26" fill="none">
+      <path d="M4 9V6a2 2 0 0 1 2-2h3" stroke="#14153f" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M22 9V6a2 2 0 0 0-2-2h-3" stroke="#14153f" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M4 17v3a2 2 0 0 0 2 2h3" stroke="#14153f" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M22 17v3a2 2 0 0 1-2 2h-3" stroke="#14153f" stroke-width="1.6" stroke-linecap="round"/>
+      <circle cx="10" cy="12" r="1.3" fill="#14153f"/>
+      <path id="wink-eye" d="M14.7 12h2.6" stroke="#14153f" stroke-width="1.4" stroke-linecap="round"/>
+      <path d="M10 16c1 1 5 1 6 0" stroke="#14153f" stroke-width="1.4" stroke-linecap="round"/>
+    </svg>
+    <h1>Facelock</h1>
+  </div>
+  <div class="topbar-right" id="topbar-actions"></div>
+</div>
+
+<div id="error-box"></div>
+
+<div class="wrap page" id="page-main">
+  <div class="panel">
+    <div class="panel-head"><span class="panel-label">Live feed</span></div>
+    <div class="panel-body">
+      <div class="viewfinder" id="viewfinder">
+        <img id="stream-img" alt="Live camera stream">
+        <div class="corner tl"></div>
+        <div class="corner tr"></div>
+        <div class="corner bl"></div>
+        <div class="corner br"></div>
+        <div id="stream-offline">
+          <span class="glyph">&#9723;</span>
+          <span>Camera offline</span>
+        </div>
+      </div>
+      <div id="recognition-status" class="invalid">Waiting for a match…</div>
+    </div>
+  </div>
+</div>
+
+<div class="wrap page" id="page-admin-lock">
+  <div class="panel">
+    <div class="panel-body">
+      <span class="lock-glyph">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+          <rect x="4" y="8" width="10" height="7" rx="1.5" stroke="currentColor" stroke-width="1.4"/>
+          <path d="M6.5 8V5.5a2.5 2.5 0 0 1 5 0V8" stroke="currentColor" stroke-width="1.4"/>
+        </svg>
+      </span>
+      <h2>Admin access required</h2>
+      <p>Enter the admin token to manage enrollment.</p>
+      <input type="password" id="token-input" placeholder="Token" onkeydown="if(event.key==='Enter') unlock()">
+      <button class="action primary" onclick="unlock()">Unlock</button>
+    </div>
+  </div>
+</div>
+
+<div class="wrap page" id="page-admin-users">
+  <div class="subnav">
+    <button class="subnav-btn active" id="subnav-users" onclick="showAdminSection('users')">Enrolled users</button>
+    <button class="subnav-btn" id="subnav-enroll" onclick="showAdminSection('enroll')">Enroll a new user</button>
+    <button class="subnav-btn" id="subnav-log" onclick="showAdminSection('log')">Identification log</button>
+  </div>
+  <div class="panel">
+    <div class="panel-head">
+      <span class="panel-label">Enrolled users</span>
+      <button class="action secondary" onclick="loadUsers()">Refresh</button>
+    </div>
+    <div class="panel-body">
+      <div id="users-list"></div>
+      <div id="users-empty" class="muted" style="display:none;">No one is enrolled yet.</div>
+    </div>
+  </div>
+</div>
+
+<div class="wrap page" id="page-admin-enroll">
+  <div class="subnav">
+    <button class="subnav-btn" id="subnav-users-2" onclick="showAdminSection('users')">Enrolled users</button>
+    <button class="subnav-btn active" id="subnav-enroll-2" onclick="showAdminSection('enroll')">Enroll a new user</button>
+    <button class="subnav-btn" id="subnav-log-2" onclick="showAdminSection('log')">Identification log</button>
+  </div>
+  <div class="panel">
+    <div class="panel-head"><span class="panel-label">Enroll a new user</span></div>
+    <div class="panel-body">
+      <div class="viewfinder" id="enroll-viewfinder" style="margin-bottom: 18px;">
+        <img id="enroll-stream-img" alt="Live camera preview">
+        <div class="corner tl"></div>
+        <div class="corner tr"></div>
+        <div class="corner bl"></div>
+        <div class="corner br"></div>
+        <div id="enroll-stream-offline" style="position:absolute; inset:0; display:none; align-items:center; justify-content:center; flex-direction:column; gap:6px; color: var(--text-faint); font-family: var(--mono); font-size: 12px; background: #05060f;">
+          <span>Camera offline</span>
+        </div>
+      </div>
+      <label class="field-label" for="enroll-name">Name</label>
+      <input type="text" id="enroll-name" placeholder="e.g. nabaa">
+      <button class="action primary" onclick="startEnrollment()">Start enrollment</button>
+      <div id="enroll-status"></div>
+    </div>
+  </div>
+</div>
+
+<div class="wrap page" id="page-admin-log">
+  <div class="subnav">
+    <button class="subnav-btn" id="subnav-users-3" onclick="showAdminSection('users')">Enrolled users</button>
+    <button class="subnav-btn" id="subnav-enroll-3" onclick="showAdminSection('enroll')">Enroll a new user</button>
+    <button class="subnav-btn active" id="subnav-log-3" onclick="showAdminSection('log')">Identification log</button>
+  </div>
+  <div class="panel">
+    <div class="panel-head"><span class="panel-label">Identification log</span></div>
+    <div class="panel-body">
+      <div id="log-wrap" style="max-height: 320px; overflow-y: auto;">
+        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+          <thead>
+            <tr>
+              <th style="text-align:left; font-family: var(--mono); font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-faint); padding: 0 8px 8px; font-weight: 400;">Name</th>
+              <th style="text-align:left; font-family: var(--mono); font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-faint); padding: 0 8px 8px; font-weight: 400;">Time</th>
+            </tr>
+          </thead>
+          <tbody id="log-body"></tbody>
+        </table>
+        <div id="log-empty" class="muted" style="display:none; padding: 4px 8px;">No identifications yet.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const BASE_URL = "http://localhost:8000";
+  const RECENT_WINDOW_MS = 5000;
+
+  let authToken = null;
+  let lastConnState = false;
+
+  const TRASH_ICON = '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 3.5h10M5.5 3.5V2a1 1 0 0 1 1-1h1a1 1 0 0 1 1 1v1.5M5.8 6.3v4M8.2 6.3v4M3.3 3.5l.5 8a1 1 0 0 0 1 .9h4.4a1 1 0 0 0 1-.9l.5-8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+  function setPage(id) {
+    document.querySelectorAll(".page").forEach(function (p) { p.classList.remove("active"); });
+    document.getElementById(id).classList.add("active");
+  }
+
+  function renderTopbar(context) {
+    const el = document.getElementById("topbar-actions");
+    if (context === "main") {
+      el.innerHTML = '<div class="system-status"><span class="dot" id="conn-dot"></span><span id="conn-text">Connecting…</span></div><button class="nav-btn ghost" onclick="goToAdmin()">Admin</button>';
+      setConnection(lastConnState);
+    } else {
+      el.innerHTML = '<button class="nav-btn" onclick="goToMain()">&larr; Back to main page</button>';
+    }
+  }
+
+  function goToMain() {
+    setPage("page-main");
+    renderTopbar("main");
+  }
+
+  function goToAdmin() {
+    if (authToken) {
+      showAdminSection("users");
+    } else {
+      setPage("page-admin-lock");
+      renderTopbar("admin");
+    }
+  }
+
+  function showAdminSection(section) {
+    renderTopbar("admin");
+    if (section === "users") {
+      setPage("page-admin-users");
+      setSubnavActive("users");
+      loadUsers();
+    } else if (section === "enroll") {
+      setPage("page-admin-enroll");
+      setSubnavActive("enroll");
+    } else if (section === "log") {
+      setPage("page-admin-log");
+      setSubnavActive("log");
+      loadLog();
+    }
+  }
+
+  function setSubnavActive(section) {
+    const map = {
+      users: ["subnav-users", "subnav-users-2", "subnav-users-3"],
+      enroll: ["subnav-enroll", "subnav-enroll-2", "subnav-enroll-3"],
+      log: ["subnav-log", "subnav-log-2", "subnav-log-3"],
+    };
+    Object.keys(map).forEach(function (key) {
+      map[key].forEach(function (id) {
+        const el = document.getElementById(id);
+        if (el) el.classList.toggle("active", key === section);
+      });
+    });
+  }
+
+  function showError(message) {
+    const box = document.getElementById("error-box");
+    box.textContent = message;
+    box.style.display = "flex";
+    clearTimeout(showError._t);
+    showError._t = setTimeout(function () { box.style.display = "none"; }, 6000);
+  }
+
+  function authHeaders() {
+    return { "Authorization": "Bearer " + authToken };
+  }
+
+  function setConnection(online) {
+    lastConnState = online;
+    const dot = document.getElementById("conn-dot");
+    const text = document.getElementById("conn-text");
+    if (!dot || !text) return;
+    dot.classList.toggle("on", online);
+    text.textContent = online ? "Online" : "Offline";
+  }
+
+  function initStream() {
+    const img = document.getElementById("stream-img");
+    const offline = document.getElementById("stream-offline");
+    img.src = BASE_URL + "/stream";
+    img.onerror = function () { img.style.display = "none"; offline.style.display = "flex"; setConnection(false); };
+    img.onload = function () { img.style.display = "block"; offline.style.display = "none"; setConnection(true); };
+
+    const img2 = document.getElementById("enroll-stream-img");
+    const offline2 = document.getElementById("enroll-stream-offline");
+    img2.src = BASE_URL + "/stream";
+    img2.onerror = function () { img2.style.display = "none"; offline2.style.display = "flex"; };
+    img2.onload = function () { img2.style.display = "block"; offline2.style.display = "none"; };
+  }
+
+  function loadLog() {
+    fetch(BASE_URL + "/log").then(function (res) {
+      if (!res.ok) throw new Error("Failed to load log");
+      return res.json();
+    }).then(function (entries) {
+      const body = document.getElementById("log-body");
+      const empty = document.getElementById("log-empty");
+      body.innerHTML = "";
+
+      if (entries.length === 0) {
+        empty.style.display = "block";
+        return;
+      }
+      empty.style.display = "none";
+
+      entries.slice().reverse().forEach(function (entry) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = '<td style="padding:7px 8px; border-top:1px solid var(--line-soft); color: var(--text);">' + escapeHtml(entry.name) +
+          '</td><td style="padding:7px 8px; border-top:1px solid var(--line-soft); font-family: var(--mono); color: var(--text-dim);">' + escapeHtml(entry.timestamp) + '</td>';
+        body.appendChild(tr);
+      });
+    }).catch(function () {
+      showError("Could not load the identification log.");
+    });
+  }
+
+  function pollRecognitionStatus() {
+    fetch(BASE_URL + "/log").then(function (res) {
+      if (!res.ok) return null;
+      return res.json();
+    }).then(function (entries) {
+      if (!entries) return;
+      const viewfinder = document.getElementById("viewfinder");
+      const statusEl = document.getElementById("recognition-status");
+
+      if (entries.length === 0) {
+        viewfinder.classList.remove("status-valid");
+        viewfinder.classList.add("status-invalid");
+        statusEl.className = "invalid";
+        statusEl.textContent = "Waiting for a match…";
+        return;
+      }
+
+      const latest = entries[entries.length - 1];
+      const age = Date.now() - new Date(latest.timestamp).getTime();
+
+      if (age >= 0 && age <= RECENT_WINDOW_MS) {
+        viewfinder.classList.add("status-valid");
+        viewfinder.classList.remove("status-invalid");
+        statusEl.className = "valid";
+        statusEl.textContent = "Hello, " + latest.name + "!";
+      } else {
+        viewfinder.classList.remove("status-valid");
+        viewfinder.classList.add("status-invalid");
+        statusEl.className = "invalid";
+        statusEl.textContent = "Waiting for a match…";
+      }
+    }).catch(function () {});
+  }
+
+  function unlock() {
+    const candidate = document.getElementById("token-input").value.trim();
+    if (!candidate) {
+      showError("Enter a token first.");
+      return;
+    }
+    fetch(BASE_URL + "/users", { headers: { "Authorization": "Bearer " + candidate } })
+      .then(function (res) {
+        if (!res.ok) {
+          return res.json().catch(function () { return {}; }).then(function (data) {
+            showError(data.error || "Invalid token.");
+            throw new Error("invalid token");
+          });
+        }
+        authToken = candidate;
+        showAdminSection("users");
+      })
+      .catch(function () {});
+  }
+
+  function loadUsers() {
+    fetch(BASE_URL + "/users", { headers: authHeaders() })
+      .then(function (res) {
+        return res.json().then(function (data) { return { ok: res.ok, data: data }; });
+      })
+      .then(function (result) {
+        if (!result.ok) {
+          showError(result.data.error || "Failed to load users.");
+          return;
+        }
+        renderUsers(result.data);
+      })
+      .catch(function () { showError("Could not reach the server."); });
+  }
+
+  function renderUsers(data) {
+    const list = document.getElementById("users-list");
+    const empty = document.getElementById("users-empty");
+    list.innerHTML = "";
+
+    if (data.length === 0) {
+      empty.style.display = "block";
+      return;
+    }
+    empty.style.display = "none";
+
+    data.forEach(function (name) {
+      const div = document.createElement("div");
+      div.className = "user-item";
+      div.innerHTML = '<span class="uname">' + escapeHtml(name) + '</span>';
+      const delBtn = document.createElement("button");
+      delBtn.className = "danger-btn";
+      delBtn.innerHTML = TRASH_ICON + "<span>Delete</span>";
+      delBtn.onclick = function () { deleteUser(name); };
+      div.appendChild(delBtn);
+      list.appendChild(div);
+    });
+  }
+
+  function deleteUser(name) {
+    if (!confirm('Delete "' + name + '"? This cannot be undone.')) return;
+    fetch(BASE_URL + "/users/" + encodeURIComponent(name), { method: "DELETE", headers: authHeaders() })
+      .then(function (res) {
+        return res.json().then(function (data) { return { ok: res.ok, data: data }; });
+      })
+      .then(function (result) {
+        if (!result.ok) {
+          showError(result.data.error || "Failed to delete user.");
+          return;
+        }
+        loadUsers();
+      })
+      .catch(function () { showError("Could not reach the server."); });
+  }
+
+  function startEnrollment() {
+    const name = document.getElementById("enroll-name").value.trim();
+    const status = document.getElementById("enroll-status");
+
+    if (!name) {
+      showError("Enter a name to enroll.");
+      return;
+    }
+
+    const headers = Object.assign({ "Content-Type": "application/json" }, authHeaders());
+
+    fetch(BASE_URL + "/enroll", { method: "POST", headers: headers, body: JSON.stringify({ name: name }) })
+      .then(function (res) {
+        return res.json().then(function (data) { return { ok: res.ok, data: data }; });
+      })
+      .then(function (result) {
+        if (!result.ok) {
+          showError(result.data.error || "Failed to start enrollment.");
+          status.textContent = "";
+          return;
+        }
+        status.textContent = "Enrollment in progress — watch the live feed for pose instructions.";
+        document.getElementById("enroll-name").value = "";
+        setTimeout(function () {
+          status.textContent = "";
+          loadUsers();
+        }, 30000);
+      })
+      .catch(function () { showError("Could not reach the server."); });
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement("div");
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  initStream();
+  goToMain();
+  pollRecognitionStatus();
+  setInterval(function () {
+    pollRecognitionStatus();
+    if (document.getElementById("page-admin-log").classList.contains("active")) {
+      loadLog();
+    }
+  }, 2000);
+</script>
+
+</body>
+</html>
