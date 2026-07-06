@@ -17,7 +17,7 @@ The objective of this project is to develop a secure, low-data facial recognitio
 
   
 ## Initial Setup:
-1. Install the required packages using `pip install -r requirements.txt`. This will install Pytorch, ONNX, and OpenCV.
+1. Install the required packages using `pip install -r requirements.txt`. This will install all the necessary libraries.
 2. Download the models by running the `setup_models.py` script.
 
 
@@ -26,7 +26,7 @@ The objective of this project is to develop a secure, low-data facial recognitio
    - This device's camera will be used to capture the visual input.
    - The device will process the visual input identify faces and log them.
    - The device will host a Management web server at `http://<Device IP>:8000/`
-2. Connect to the web server at `http://<Device IP>:8000/` to access the management console. Through this console, an admin can:
+2. Connect to the web server at `http://<Device IP>:8000/` from the same or from a different device to access the management console. Through this console, an admin can:
    - View the capture device's camera.
    - View the log.
    - Switch to enroll mode to enroll new users.
