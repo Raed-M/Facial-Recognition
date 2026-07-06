@@ -1,0 +1,91 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Face Security Console</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 20px; background: #f4f4f4; }
+  h1 { font-size: 1.3em; }
+  h3 { margin-top: 0; }
+  .row { display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-start; }
+  .card { background: #fff; border-radius: 8px; padding: 15px;
+          box-shadow: 0 1px 3px rgba(0,0,0,.15); }
+  img { max-width: 640px; width: 100%; border-radius: 4px; }
+  input, button { padding: 6px 10px; margin: 2px 0; }
+  button { cursor: pointer; }
+  table { border-collapse: collapse; }
+  td, th { text-align: left; padding: 4px 14px 4px 0; border-bottom: 1px solid #eee; }
+  #msg { color: #b00; min-height: 1.2em; }
+  li { margin: 4px 0; }
+</style>
+</head>
+<body>
+<h1>Face Security Console</h1>
+<div class="row">
+  <div class="card">
+    <h3>Live feed</h3>
+    <img src="/stream" alt="camera stream">
+  </div>
+  <div class="card">
+    <h3>Admin</h3>
+    <input type="password" id="token" placeholder="Admin token"><br>
+    <input id="name" placeholder="New user's name">
+    <button onclick="enroll()">Start enrollment</button>
+    <p id="msg"></p>
+    <h3>Enrolled users <button onclick="loadUsers()">refresh</button></h3>
+    <ul id="users"><li>(enter token, then refresh)</li></ul>
+  </div>
+  <div class="card">
+    <h3>Identification log</h3>
+    <table id="log"></table>
+  </div>
+</div>
+<script>
+const $ = id => document.getElementById(id);
+const auth = () => ({ "Authorization": "Bearer " + $("token").value,
+                      "Content-Type": "application/json" });
+
+async function call(url, options) {
+  const r = await fetch(url, options);
+  const data = await r.json();
+  $("msg").textContent = r.ok ? "" : (data.error || "error " + r.status);
+  return r.ok ? data : null;
+}
+
+async function enroll() {
+  const name = $("name").value.trim();
+  if (!name) { $("msg").textContent = "enter a name"; return; }
+  if (await call("/enroll", { method: "POST", headers: auth(),
+                              body: JSON.stringify({ name }) })) {
+    $("msg").textContent = "Enrolling - follow the instructions on the video";
+    setTimeout(loadUsers, 15000);
+  }
+}
+
+async function loadUsers() {
+  const users = await call("/users", { headers: auth() });
+  if (!users) return;
+  $("users").innerHTML = users.map(u =>
+    `<li>${u} <button onclick="delUser('${u}')">delete</button></li>`).join("")
+    || "<li>(none)</li>";
+}
+
+async function delUser(name) {
+  if (!confirm("Delete " + name + "?")) return;
+  await call("/users/" + encodeURIComponent(name),
+             { method: "DELETE", headers: auth() });
+  loadUsers();
+}
+
+async function loadLog() {
+  const log = await fetch("/log").then(r => r.json());
+  $("log").innerHTML = "<tr><th>Time</th><th>Name</th></tr>" +
+    log.slice().reverse().map(e =>
+      `<tr><td>${e.timestamp}</td><td>${e.name}</td></tr>`).join("");
+}
+
+setInterval(loadLog, 2000);
+loadLog();
+</script>
+</body>
+</html>

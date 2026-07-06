@@ -1,18 +1,19 @@
-"""Core library: face detection (UltraFace), embedding (MobileFaceNet), and enrollment DB."""
+"""Model helpers (detection, liveness, embedding) and the enrollment database."""
 import os
 
 import cv2
 import numpy as np
 import onnxruntime as ort
 
-DETECTOR_PATH = "models/version-RFB-320.onnx"
-EMBEDDER_PATH = "models/mobilefacenet.onnx"  # swap for models/mobilefacenet_int8.onnx after setup
-DB_PATH = "face_db.npy"
-THRESHOLD = 0.6  # L2 distance on normalized embeddings; tune with real data (see README)
+import config
 
 
 def load_session(path):
     return ort.InferenceSession(path, providers=["CPUExecutionProvider"])
+
+
+def _run(session, x):
+    return session.run(None, {session.get_inputs()[0].name: x})
 
 
 # ---------------- Face detection (UltraFace, 320x240 input) ----------------
@@ -23,8 +24,8 @@ def detect_faces(session, frame, score_thresh=0.7, iou_thresh=0.3):
     img = cv2.cvtColor(cv2.resize(frame, (320, 240)), cv2.COLOR_BGR2RGB)
     img = ((img.astype(np.float32) - 127.0) / 128.0).transpose(2, 0, 1)[None]
 
-    scores, boxes = session.run(None, {session.get_inputs()[0].name: img})
-    scores, boxes = scores[0, :, 1], boxes[0]  # scores: (N,), boxes: (N, 4) normalized
+    scores, boxes = _run(session, img)
+    scores, boxes = scores[0, :, 1], boxes[0]   # (N,), (N, 4) normalized coords
 
     keep = scores > score_thresh
     scores, boxes = scores[keep], boxes[keep]
@@ -55,36 +56,69 @@ def _nms(boxes, scores, iou_thresh):
     return keep
 
 
+# ---------------- Liveness (MiniFASNet V2, 80x80 input) ----------------
+
+def liveness_score(session, frame, box):
+    """Probability that the face is real (not a photo or a screen).
+
+    MiniFASNet expects a crop with a 2.7x margin around the face box; the extra
+    background (paper edges, screen bezels, moire) is how it spots spoofs.
+    Input stays BGR, scaled to [0, 1].
+    """
+    x1, y1, x2, y2 = box
+    cx, cy = (x1 + x2) / 2, (y1 + y2) / 2
+    half = 2.7 * max(x2 - x1, y2 - y1) / 2
+    h, w = frame.shape[:2]
+    crop = frame[int(max(cy - half, 0)):int(min(cy + half, h)),
+                 int(max(cx - half, 0)):int(min(cx + half, w))]
+    if crop.size == 0:
+        return 0.0
+    x = (cv2.resize(crop, (80, 80)).astype(np.float32) / 255.0).transpose(2, 0, 1)[None]
+    logits = _run(session, x)[0][0]
+    probs = np.exp(logits - logits.max())
+    probs /= probs.sum()
+    return float(probs[1])   # class 1 = real (Silent-Face convention; see README)
+
+
 # ---------------- Embedding (MobileFaceNet, 112x112 input) ----------------
 
 def embed(session, face_bgr):
-    """Map a BGR face crop to a normalized 512-d embedding."""
+    """Normalized 512-d embedding of a tight BGR face crop."""
     face = cv2.cvtColor(cv2.resize(face_bgr, (112, 112)), cv2.COLOR_BGR2RGB)
     x = ((face.astype(np.float32) - 127.5) / 127.5).transpose(2, 0, 1)[None]
-    e = session.run(None, {session.get_inputs()[0].name: x})[0][0]
+    e = _run(session, x)[0][0]
     return e / np.linalg.norm(e)
 
 
+def tight_crop(frame, box):
+    x1, y1, x2, y2 = box
+    c = frame[y1:y2, x1:x2]
+    return c if c.size else None
+
+
 # ---------------- Enrollment database ----------------
+# {name: array of shape (POSES_REQUIRED, 512)} - several pose embeddings each.
 
 def load_db():
-    if os.path.exists(DB_PATH):
-        return np.load(DB_PATH, allow_pickle=True).item()
-    return {}  # name -> normalized mean embedding
+    if os.path.exists(config.DB_PATH):
+        return np.load(config.DB_PATH, allow_pickle=True).item()
+    return {}
 
 
-def enroll(db, name, embeddings):
-    """Average 5-10 sample embeddings and store the user. No retraining involved."""
-    mean = np.stack(embeddings).mean(axis=0)
-    db[name] = mean / np.linalg.norm(mean)
-    np.save(DB_PATH, db)
+def save_db(db):
+    np.save(config.DB_PATH, db)
+
+
+def save_user(db, name, pose_embeddings):
+    db[name] = np.stack(pose_embeddings)
+    save_db(db)
 
 
 def identify(db, emb):
-    """Nearest enrolled user, or 'Unknown' if the distance crosses THRESHOLD."""
+    """Closest enrolled person, by minimum distance to any of their poses."""
     name, best = "Unknown", float("inf")
-    for n, ref in db.items():
-        d = np.linalg.norm(emb - ref)
+    for n, poses in db.items():
+        d = float(np.linalg.norm(poses - emb, axis=1).min())
         if d < best:
             name, best = n, d
-    return (name if best < THRESHOLD else "Unknown"), best
+    return (name if best < config.MATCH_THRESHOLD else "Unknown"), best
