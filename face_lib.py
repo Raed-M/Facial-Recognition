@@ -74,10 +74,8 @@ def liveness_score(session, frame, box):
     if crop.size == 0:
         return 0.0
     x = (cv2.resize(crop, (80, 80)).astype(np.float32) / 255.0).transpose(2, 0, 1)[None]
-    logits = _run(session, x)[0][0]
-    probs = np.exp(logits - logits.max())
-    probs /= probs.sum()
-    return float(probs[1])   # class 1 = real (Silent-Face convention; see README)
+    probs = _run(session, x)[0][0]   # already softmax'd: [live, print-attack, replay-attack]
+    return float(probs[0])   # index 0 = live
 
 
 # ---------------- Embedding (MobileFaceNet, 112x112 input) ----------------
