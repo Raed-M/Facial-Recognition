@@ -56,26 +56,48 @@ def _nms(boxes, scores, iou_thresh):
     return keep
 
 
-# ---------------- Liveness (MiniFASNet V2, 80x80 input) ----------------
+# ---------------- Liveness (MiniFASNetV2-SE, 128x128 input) ----------------
 
-def liveness_score(session, frame, box):
-    """Probability that the face is real (not a photo or a screen).
+def _liveness_crop(frame_rgb, box, expansion=1.5):
+    """Square crop of `expansion`x the face box, reflection-padded at edges.
 
-    MiniFASNet expects a crop with a 2.7x margin around the face box; the extra
-    background (paper edges, screen bezels, moire) is how it spots spoofs.
-    Input stays BGR, scaled to [0, 1].
+    Padding (not clipping) keeps the crop square, so nothing gets stretched.
     """
     x1, y1, x2, y2 = box
-    cx, cy = (x1 + x2) / 2, (y1 + y2) / 2
-    half = 2.7 * max(x2 - x1, y2 - y1) / 2
-    h, w = frame.shape[:2]
-    crop = frame[int(max(cy - half, 0)):int(min(cy + half, h)),
-                 int(max(cx - half, 0)):int(min(cx + half, w))]
+    w, h = x2 - x1, y2 - y1
+    side = int(max(w, h) * expansion)
+    x = int((x1 + x2) / 2 - side / 2)
+    y = int((y1 + y2) / 2 - side / 2)
+    H, W = frame_rgb.shape[:2]
+    cx1, cy1, cx2, cy2 = max(0, x), max(0, y), min(W, x + side), min(H, y + side)
+    inner = frame_rgb[cy1:cy2, cx1:cx2]
+    return cv2.copyMakeBorder(inner, max(0, -y), max(0, y + side - H),
+                              max(0, -x), max(0, x + side - W),
+                              cv2.BORDER_REFLECT_101)
+
+
+def _liveness_preprocess(crop, size=128):
+    """Letterbox-resize to size x size, /255, HWC->CHW (matches the model repo)."""
+    old = crop.shape[:2]
+    r = size / max(old)
+    sh = (int(old[0] * r), int(old[1] * r))
+    interp = cv2.INTER_LANCZOS4 if r > 1 else cv2.INTER_AREA
+    img = cv2.resize(crop, (sh[1], sh[0]), interpolation=interp)
+    dh, dw = size - sh[0], size - sh[1]
+    img = cv2.copyMakeBorder(img, dh // 2, dh - dh // 2, dw // 2, dw - dw // 2,
+                             cv2.BORDER_REFLECT_101)
+    return (img.transpose(2, 0, 1).astype(np.float32) / 255.0)[None]
+
+
+def liveness_score(session, frame, box):
+    """Probability that the face is real (not a photo or a screen)."""
+    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    crop = _liveness_crop(frame_rgb, box)
     if crop.size == 0:
         return 0.0
-    x = (cv2.resize(crop, (80, 80)).astype(np.float32) / 255.0).transpose(2, 0, 1)[None]
-    probs = _run(session, x)[0][0]   # already softmax'd: [live, print-attack, replay-attack]
-    return float(probs[0])   # index 0 = live
+    real, spoof = _run(session, _liveness_preprocess(crop))[0][0]
+    score = float(1.0 / (1.0 + np.exp(-(real - spoof))))
+    return score
 
 
 # ---------------- Embedding (MobileFaceNet, 112x112 input) ----------------

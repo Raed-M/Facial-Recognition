@@ -8,7 +8,7 @@ TOKEN = "change-me"     # admin token for the control endpoints
 
 # Model files (created by setup_models.py)
 DETECTOR_PATH = "models/version-RFB-320.onnx"
-LIVENESS_PATH = "models/minifasnet_v2.onnx"
+LIVENESS_PATH = "models/liveness.onnx"
 EMBEDDER_PATH = "models/mobilefacenet_int8.onnx"   # or mobilefacenet.onnx (FP32)
 
 # Data files
@@ -17,7 +17,7 @@ LOG_PATH = "log.jsonl"
 
 # Recognition
 MATCH_THRESHOLD = 1.0     # L2 distance; lower = stricter (tune it, see README)
-LIVENESS_THRESHOLD = 0.5  # required probability that the face is real
+LIVENESS_THRESHOLD = 0.1  # required probability that the face is real
 LOG_COOLDOWN = 5          # seconds between repeated logs of the same person
 
 # Enrollment
